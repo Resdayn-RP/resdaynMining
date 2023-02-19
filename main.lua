@@ -1,5 +1,5 @@
 ---@param seconds integer The amount of seconds you wish to hold the script by
-local function wait(seconds)
+local function Wait(seconds)
     local clock = os.clock
     local t0 = clock()
     while clock() - t0 <= seconds do end
@@ -26,7 +26,7 @@ Mining.lootTable = require("custom.Mining.lootTable")
 function Mining.CreateRecord()
     local recordStore = RecordStores["spell"]
     recordStore.data.permanentRecords["burden_enable"] = {
-		name = "Permanent Burden",
+		name = "Mining Ore",
 		subtype = 1,
 		cost = 0,
 		flags = 0,
@@ -72,23 +72,27 @@ function Mining.sendSpell(pid, id, action)
     tes3mp.SendSpellbookChanges(pid)
 end
 
----@return string ore
----@return integer amount
+---@return string|nil ore
+---@return integer|nil amount
 function Mining.determineLoot()
     for ore, info in pairs(Mining.lootTable) do
         local chance = math.random(1, 100)
-        if chance > info.chance and chance < info.limit then
+        if info.limit > chance and chance > info.chance then
             log(ore)
             local amount = math.random(info.min, info.max)
             return ore, amount
         end
     end
+    return nil, nil
 end
 
 ---@param pid integer PlayerID
 function Mining.addLoot(pid)
     local player = Players[pid]
-    local ore, amount = Mining.determineLoot()
+    local ore, amount = nil, nil
+    repeat
+        ore, amount = Mining.determineLoot()
+    until ore and amount
     log(ore .. tostring(amount))
     inventoryHelper.addItem(player.data.inventory, ore, amount, -1, -1, "")
     player:LoadInventory()
@@ -103,20 +107,29 @@ function Mining.mine(pid)
     if not Mining.hasPick(player) then return end
     log("Hello!")
     Mining.sendSpell(pid, "burden_enable", enumerations.spellbook.ADD)
-    wait(3)
+    Wait(3)
     Mining.sendSpell(pid, "burden_enable", enumerations.spellbook.REMOVE)
     Mining.addLoot(pid)
 end
 
+---@param obj table
+---@return boolean isDeposit
+function Mining.isItDeposit(obj)
+    for i = 1, 6, 1 do
+        local target = "rock_diamond_0" .. tostring(i)
+        if obj.refId == target then return true end
+    end
+    return false
+end
+
+---@param eventStatus table
+---@param pid string PlayerID
+---@param cellDescription string Location of player
+---@param objects table Activated object(s)
+---@param players table Target Players
 function Mining.OnOreActivation(eventStatus, pid, cellDescription, objects, players)
-    for _, object in pairs(objects) do
-        for i = 1, 6, 1 do
-            local target = "rock_diamond_0" .. tostring(i)
-            if object.refId == target then 
-                eventStatus.validDefaultHandler = false
-                break
-            end
-        end
+    for _, object in pairs(objects) do 
+        eventStatus.validDefaultHandler = not Mining.isItDeposit(object)
     end
     
     if eventStatus.validDefaultHandler then return eventStatus end
@@ -125,8 +138,5 @@ function Mining.OnOreActivation(eventStatus, pid, cellDescription, objects, play
     return eventStatus
 end
 
-customEventHooks.registerHandler("OnServerPostInit", function()
-    Mining.CreateRecord()
-end)
-
+customEventHooks.registerHandler("OnServerPostInit", Mining.CreateRecord)
 customEventHooks.registerValidator("OnObjectActivate", Mining.OnOreActivation)
