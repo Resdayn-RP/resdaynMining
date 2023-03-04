@@ -12,6 +12,12 @@ local function log(message)
     tes3mp.LogMessage(enumerations.log.VERBOSE, "[ Mining ]: " .. message)
 end
 
+if not ResdaynCore then 
+    log("Cannot find ResdaynCore, Mining Will Not Run")
+    return
+end
+
+
 ---@class Mining
 ---@field uniqueIndexCache table
 ---@field skillId integer
