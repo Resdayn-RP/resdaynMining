@@ -19,58 +19,7 @@ end
 ---@field mine function
 local Mining = {}
 
-Mining.uniqueIndexCache = {}
-Mining.skillId = 100
 Mining.lootTable = require("custom.Mining.lootTable")
-
-function Mining.CreateRecord()
-    local recordStore = RecordStores["spell"]
-    recordStore.data.permanentRecords["burden_enable"] = {
-		name = "Mining Ore",
-		subtype = 1,
-		cost = 0,
-		flags = 0,
-		effects = {
-			{
-				attribute = -1,
-				area = 0,
-				duration = 10,
-				id = 7,
-				rangeType = 0,
-				skill = -1,
-				magnitudeMin = 900,
-				magnitudeMax = 900
-			}
-		}
-	}
-	recordStore:Save()
-end
-
----@param pid integer PlayerID
-function Mining.updatePlayerSpellbook(pid)
-    Players[pid]:LoadSpellbook()
-end
-
----@param player string
----@return boolean hasPick
-function Mining.hasPick(player)
-    if not inventoryHelper.getItemIndex(player.data.inventory, "miner's pick", -1) then
-        log("Miner's Pick not present in " .. player.name .. "'s inventory")
-        return false
-    end
-    log("Miner's Pick Present, " .. player.name .. " is starting to mine.")
-    return true
-end
-
----@param pid integer PlayerID
----@param id string Spell ID
----@param action integer Add/Remove
-function Mining.sendSpell(pid, id, action)
-    tes3mp.ClearSpellbookChanges(pid)
-    tes3mp.SetSpellbookChangesAction(pid, action)
-    tes3mp.AddSpell(pid, id)
-    tes3mp.SendSpellbookChanges(pid)
-end
 
 ---@return string|nil ore
 ---@return integer|nil amount
@@ -94,21 +43,20 @@ function Mining.addLoot(pid)
         ore, amount = Mining.determineLoot()
     until ore and amount
     log(ore .. tostring(amount))
-    inventoryHelper.addItem(player.data.inventory, ore, amount, -1, -1, "")
-    player:LoadInventory()
-    player:LoadEquipment()
-    player:QuicksaveToDrive()
+    ResdaynCore.functions.addItem(player, ore, amount)
 end
 
 ---@param pid integer PlayerId
 function Mining.mine(pid)
     local player = Players[pid]
-    
-    if not Mining.hasPick(player) then return end
-    log("Hello!")
-    Mining.sendSpell(pid, "burden_enable", enumerations.spellbook.ADD)
+    if not ResdaynCore.functions.itemCheck(player, "miner's pick") then
+        log("Miner's Pick not present in " .. player.name .. "'s inventory")
+        return
+    end
+    log("Miner's Pick Present, " .. player.name .. " is starting to mine.")
+    ResdaynCore.functions.sendSpell(pid, "burden_enable", enumerations.spellbook.ADD)
     Wait(3)
-    Mining.sendSpell(pid, "burden_enable", enumerations.spellbook.REMOVE)
+    ResdaynCore.functions.sendSpell(pid, "burden_enable", enumerations.spellbook.REMOVE)
     Mining.addLoot(pid)
 end
 
@@ -138,5 +86,11 @@ function Mining.OnOreActivation(eventStatus, pid, cellDescription, objects, play
     return eventStatus
 end
 
-customEventHooks.registerHandler("OnServerPostInit", Mining.CreateRecord)
+function Mining.OnServerPostInit()
+    ResdaynCore.functions.createBurdenSpell("Mining Ore", 900)
+end
+
+customEventHooks.registerHandler("OnServerPostInit", Mining.OnServerPostInit)
 customEventHooks.registerValidator("OnObjectActivate", Mining.OnOreActivation)
+
+return Mining
